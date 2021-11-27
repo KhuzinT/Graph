@@ -1,37 +1,26 @@
 #include <iostream>
 #include <algorithm>
-#include <unordered_map>
 #include <string>
 #include <vector>
-#include <queue>
 
 //********************************************************************************************
 
-typedef uint64_t Vertex;
+using Vertex = uint32_t;
 
-typedef uint64_t dist_t;
+using ColorT = char;
 
-typedef uint64_t weight_t;
-
-typedef char color_t;
-
-const uint64_t poison = 1000 * 1000 * 1000 * 1LL;
+const uint32_t kInfinity = 1000 * 1000 * 1000 * 1LL;
 
 //********************************************************************************************
 
-class Graph {
+class IGraph {
 protected:
 
     Vertex q_vertex = 0;
 
     bool is_oriented = false;
 
-    virtual void Add(const Vertex& a, const Vertex& b, const weight_t& w) = 0;
-
-    struct Neighbors {
-        std::vector<Vertex> vertex;
-        std::vector<weight_t> weight;
-    };
+    virtual void Add(const Vertex& begin, const Vertex& end) = 0;
 
 public:
 
@@ -39,139 +28,77 @@ public:
         return q_vertex;
     }
 
-    [[nodiscard]] virtual Neighbors GetNeighbors(const Vertex& v) const = 0;
+    [[nodiscard]] virtual std::vector<Vertex> GetNeighbors(const Vertex& vertex) const = 0;
 
-    [[nodiscard]] virtual std::vector<Vertex> GetNeighborsVertex(const Vertex& v) const = 0;
-
-    [[nodiscard]] virtual std::vector<weight_t> GetNeighborsWeight(const Vertex& v) const = 0;
-
-    void AddEdge(const Vertex& a, const Vertex& b, const weight_t& w) {
-        Add(a - 1, b - 1, w);
+    void AddEdge(const Vertex& begin, const Vertex& end) {
+        Add(begin - 1, end - 1);
     }
 
 };
 
 //********************************************************************************************
 
-class GraphMatrix final : public Graph {
+class [[maybe_unused]] GraphMatrix final : public IGraph {
 private:
 
-    std::vector<std::vector<Vertex>> matrix;
+    std::vector<std::vector<Vertex>> matrix_;
 
-    void Add(const Vertex& a, const Vertex& b, const weight_t& w) override {
-        if (a == b) {
-            return;
-        }
-        if (a < 0 || b < 0) {
-            return;
-        }
-        if (a >= q_vertex || b >= q_vertex) {
-            return;
-        }
-        matrix[a][b] = w;
+    void Add(const Vertex& begin, const Vertex& end) override {
+        matrix_[begin][end] = 1;
         if (!is_oriented) {
-            matrix[b][a] = w;
+            matrix_[end][begin] = 1;
         }
     }
 
 public:
 
-    explicit GraphMatrix(const Vertex& quantity, bool oriented = false) {
-        for (Vertex i = 0; i < quantity; ++i) {
-            std::vector<Vertex> tmp(quantity, poison);
-            matrix.push_back(tmp);
+    [[maybe_unused]] explicit GraphMatrix(const Vertex& quantity, bool oriented = false) {
+        for (uint32_t i = 0; i < quantity; ++i) {
+            std::vector<Vertex> tmp(quantity, kInfinity);
+            matrix_.push_back(tmp);
         }
         q_vertex = quantity;
         is_oriented = oriented;
     }
 
-    [[nodiscard]] Neighbors GetNeighbors(const Vertex& v) const override {
-        Neighbors answer;
-        for (Vertex i = 0; i < GetQVertex(); ++i) {
-            if (matrix[v][i] != poison) {
-                answer.vertex.push_back(i);
-                answer.weight.push_back(matrix[v][i]);
-            }
-        }
-        return answer;
-    }
-
-    [[nodiscard]] std::vector<Vertex> GetNeighborsVertex(const Vertex& v) const override {
+    [[nodiscard]] std::vector<Vertex> GetNeighbors(const Vertex& vertex) const override {
         std::vector<Vertex> answer;
-        for (Vertex i = 0; i < GetQVertex(); ++i) {
-            if (matrix[v][i] != poison) {
-                answer.push_back(i);
+        for (Vertex next_vertex = 0; next_vertex < GetQVertex(); ++next_vertex) {
+            if (matrix_[vertex][next_vertex] != kInfinity) {
+                answer.push_back(next_vertex);
             }
         }
         return answer;
     }
-
-    [[nodiscard]] std::vector<weight_t> GetNeighborsWeight(const Vertex& v) const override {
-        std::vector<weight_t> answer;
-        for (Vertex i = 0; i < GetQVertex(); ++i) {
-            if (matrix[v][i] != poison) {
-                answer.push_back(matrix[v][i]);
-            }
-        }
-        return answer;
-    }
-
-
 };
 
 //********************************************************************************************
 
-class GraphList final : public Graph {
+class [[maybe_unused]] GraphList final : public IGraph {
 private:
 
-    std::unordered_map<Vertex, Neighbors> list;
+    std::vector<std::vector<Vertex>> list_;
 
-    void Add(const Vertex& a, const Vertex& b, const weight_t& w) override {
-        if (a == b) {
-            return;
-        }
-        if (a < 0 || b < 0) {
-            return;
-        }
-        if (a >= q_vertex || b >= q_vertex) {
-            return;
-        }
-        list[a].vertex.push_back(b);
-        list[a].weight.push_back(w);
+    void Add(const Vertex& begin, const Vertex& end) override {
+        list_[begin].push_back(end);
         if (!is_oriented) {
-            list[b].vertex.push_back(a);
-            list[b].weight.push_back(w);
+            list_[end].push_back(begin);
         }
     }
 
 public:
 
-    explicit GraphList(const Vertex& quantity, bool oriented = false) {
-        for (Vertex i = 0; i < quantity; ++i) {
-            Neighbors tmp;
-            list[i] = tmp;
+    [[maybe_unused]] explicit GraphList(const uint32_t& quantity, bool oriented = false) {
+        for (uint32_t i = 0; i < quantity; ++i) {
+            std::vector<Vertex> tmp;
+            list_.push_back(tmp);
         }
         q_vertex = quantity;
         is_oriented = oriented;
     }
 
-    [[nodiscard]] Neighbors GetNeighbors(const Vertex& v) const override {
-        Neighbors answer;
-        answer.vertex = list.at(v).vertex;
-        answer.weight = list.at(v).weight;
-        return answer;
-    }
-
-    [[nodiscard]] std::vector<Vertex> GetNeighborsVertex(const Vertex& v) const override {
-        std::vector<Vertex> answer;
-        answer = list.at(v).vertex;
-        return answer;
-    }
-
-    [[nodiscard]] std::vector<weight_t> GetNeighborsWeight(const Vertex& v) const override {
-        std::vector<weight_t> answer;
-        answer = list.at(v).weight;
-        return answer;
+    [[nodiscard]] std::vector<Vertex> GetNeighbors(const Vertex& vertex) const override {
+        return list_[vertex];
     }
 
 };
@@ -184,110 +111,110 @@ enum {
     BLACK = 2
 };
 
-class GraphAlgorithm {
-    std::vector<dist_t> dist;
+struct GraphInfo {
+    std::vector<ColorT> color;
     std::vector<Vertex> parent;
-    std::vector<color_t> color;
 
-    Vertex start_cycle = poison;
-    Vertex end_cycle = poison;
+    Vertex start_cycle = kInfinity;
+    Vertex end_cycle = kInfinity;
 
-    GraphAlgorithm(const uint64_t& quantity) {
-        dist.clear();
-        parent.clear();
-        color.clear();
+    bool cycle_found = false;
 
-        for (uint64_t i = 0; i < quantity; ++i) {
-            dist.push_back(poison);
-            parent.push_back(poison);
-            color.push_back(WHITE);
-        }
+    explicit GraphInfo(const uint32_t& quantity) {
+        color.resize(quantity, WHITE);
+        parent.resize(quantity, kInfinity);
 
-        start_cycle = poison;
-        end_cycle = poison;
+        start_cycle = kInfinity;
+        end_cycle = kInfinity;
+
+        cycle_found = false;
     }
-
-    bool DFS(Graph& G, const Vertex& v) {
-        color[v] = GREY;
-        auto neighbors = G.GetNeighbors(v);
-        for (auto &u : neighbors.vertex) {
-            if (color[u] == WHITE) {
-                parent[u] = v;
-                if (DFS(G, u)) {
-                    return true;
-                }
-            } else if (color[u] == GREY) {
-                start_cycle = u;
-                end_cycle = v;
-                return true;
-            }
-        }
-        color[v] = BLACK;
-        return false;
-    }
-
-    friend std::vector<Vertex> FindCycle(Graph& G);
 };
 
-
-std::vector<Vertex> FindCycle(Graph& G) {
-    GraphAlgorithm GAlg(G.GetQVertex());
-
-    for (Vertex v = 0; v < G.GetQVertex(); ++v) {
-        if (GAlg.DFS(G, v)) {
-            break;
+void DFS(IGraph& graph, const Vertex& current_vertex, GraphInfo& info) {
+    info.color[current_vertex] = GREY;
+    auto neighbors = graph.GetNeighbors(current_vertex);
+    for (auto &next_vertex : neighbors) {
+        if (info.color[next_vertex] == WHITE) {
+            info.parent[next_vertex] = current_vertex;
+            DFS(graph, next_vertex, info);
+            if (info.cycle_found) {
+                return;
+            }
+        } else if (info.color[next_vertex] == GREY) {
+            info.start_cycle = next_vertex;
+            info.end_cycle = current_vertex;
+            info.cycle_found = true;
+            return;
         }
+    }
+    info.color[current_vertex] = BLACK;
+}
+
+std::vector<Vertex> GetAnswer(const Vertex& start_cycle, const Vertex& end_cycle, std::vector<Vertex>& parent) {
+    if (start_cycle == kInfinity) {
+        return {};
     }
 
     std::vector<Vertex> answer;
-    if (GAlg.start_cycle == poison) {
-        return answer;
+    for (Vertex current_vertex = end_cycle; current_vertex != start_cycle; current_vertex = parent[current_vertex]) {
+        answer.push_back(current_vertex + 1);
     }
-
-    for (Vertex v = GAlg.end_cycle; v != GAlg.start_cycle; v = GAlg.parent[v]) {
-        answer.push_back(v + 1);
-    }
-    answer.push_back(GAlg.start_cycle + 1);
+    answer.push_back(start_cycle + 1);
     std::reverse(answer.begin(), answer.end());
 
     return answer;
+}
+
+std::vector<Vertex> FindCycle(IGraph& graph) {
+    GraphInfo info(graph.GetQVertex());
+
+    for (Vertex current_vertex = 0; current_vertex < graph.GetQVertex(); ++current_vertex) {
+        DFS(graph, current_vertex, info);
+        if (info.cycle_found) {
+            break;
+        }
+    }
+    return GetAnswer(info.start_cycle, info.end_cycle, info.parent);
 }
 
 //********************************************************************************************
 
 enum GraphType {
     ORIENTED = true,
-    NOT_ORIENTED = false
+    NOT_ORIENTED [[maybe_unused]] = false
 };
 
 int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(nullptr);
 
-    Vertex q_vertex = 0, q_edge = 0;
+    uint32_t q_vertex = 0;
+    uint32_t q_edge = 0;
     std::cin >> q_vertex >> q_edge;
 
-    GraphList G(q_vertex, ORIENTED);
+    GraphList graph(q_vertex, ORIENTED);
 
-    for (uint64_t i = 0; i < q_edge; ++i) {
-        Vertex a = 0, b = 0;
-        std::cin >> a >> b;
-        G.AddEdge(a, b, 1);
+    for (uint32_t i = 0; i < q_edge; ++i) {
+        Vertex begin = 0;
+        Vertex end = 0;
+        std::cin >> begin >> end;
+        graph.AddEdge(begin, end);
     }
 
-    auto answer = FindCycle(G);
+    auto answer = FindCycle(graph);
     if (answer.empty()) {
         std::cout << "NO" << std::endl;
-        return 0;
+    } else {
+        std::cout << "YES" << std::endl;
+        for (auto &element : answer) {
+            std::cout << element << ' ';
+        }
+        std::cout << std::endl;
     }
-
-    std::cout << "YES" << std::endl;
-    for (auto &element : answer) {
-        std::cout << element << ' ';
-    }
-    std::cout << std::endl;
-
+    
     return 0;
 }
 
 //********************************************************************************************
+
