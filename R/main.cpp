@@ -7,33 +7,22 @@
 
 //********************************************************************************************
 
-typedef uint64_t Vertex;
+using Vertex = int32_t;
 
-typedef uint64_t dist_t;
+using TimeT = int32_t;
 
-typedef uint64_t weight_t;
-
-typedef char color_t;
-
-typedef uint64_t time_type;
-
-const uint64_t poison = 1000 * 1000 * 1000 * 1LL;
+const int32_t kInfinity = 1000 * 1000 * 1000 * 1LL;
 
 //********************************************************************************************
 
-class Graph {
+class IGraph {
 protected:
 
     Vertex q_vertex = 0;
 
     bool is_oriented = false;
 
-    virtual void Add(const Vertex& a, const Vertex& b, const weight_t& w) = 0;
-
-    struct Neighbors {
-        std::vector<Vertex> vertex;
-        std::vector<weight_t> weight;
-    };
+    virtual void Add(const Vertex& begin, const Vertex& end) = 0;
 
 public:
 
@@ -41,242 +30,148 @@ public:
         return q_vertex;
     }
 
-    [[nodiscard]] virtual Neighbors GetNeighbors(const Vertex& v) const = 0;
+    [[nodiscard]] virtual std::vector<Vertex> GetNeighbors(const Vertex& vertex) const = 0;
 
-    [[nodiscard]] virtual std::vector<Vertex> GetNeighborsVertex(const Vertex& v) const = 0;
-
-    [[nodiscard]] virtual std::vector<weight_t> GetNeighborsWeight(const Vertex& v) const = 0;
-
-    void AddEdge(const Vertex& a, const Vertex& b, const weight_t& w) {
-        Add(a - 1, b - 1, w);
+    void AddEdge(const Vertex& begin, const Vertex& end) {
+        Add(begin - 1, end - 1);
     }
 
 };
 
 //********************************************************************************************
 
-class GraphMatrix final : public Graph {
+class [[maybe_unused]] GraphMatrix final : public IGraph {
 private:
 
-    std::vector<std::vector<Vertex>> matrix;
+    std::vector<std::vector<Vertex>> matrix_;
 
-    void Add(const Vertex& a, const Vertex& b, const weight_t& w) override {
-        if (a == b) {
-            return;
-        }
-        if (a < 0 || b < 0) {
-            return;
-        }
-        if (a >= q_vertex || b >= q_vertex) {
-            return;
-        }
-        matrix[a][b] = w;
+    void Add(const Vertex& begin, const Vertex& end) override {
+        matrix_[begin][end] = 1;
         if (!is_oriented) {
-            matrix[b][a] = w;
+            matrix_[end][begin] = 1;
         }
     }
 
 public:
 
-    explicit GraphMatrix(const Vertex& quantity, bool oriented = false) {
-        for (Vertex i = 0; i < quantity; ++i) {
-            std::vector<Vertex> tmp(quantity, poison);
-            matrix.push_back(tmp);
+    [[maybe_unused]] explicit GraphMatrix(const Vertex& quantity, bool oriented = false) {
+        for (int32_t i = 0; i < quantity; ++i) {
+            std::vector<Vertex> tmp(quantity, kInfinity);
+            matrix_.push_back(tmp);
         }
         q_vertex = quantity;
         is_oriented = oriented;
     }
 
-    [[nodiscard]] Neighbors GetNeighbors(const Vertex& v) const override {
-        Neighbors answer;
-        for (Vertex i = 0; i < GetQVertex(); ++i) {
-            if (matrix[v][i] != poison) {
-                answer.vertex.push_back(i);
-                answer.weight.push_back(matrix[v][i]);
-            }
-        }
-        return answer;
-    }
-
-    [[nodiscard]] std::vector<Vertex> GetNeighborsVertex(const Vertex& v) const override {
+    [[nodiscard]] std::vector<Vertex> GetNeighbors(const Vertex& vertex) const override {
         std::vector<Vertex> answer;
-        for (Vertex i = 0; i < GetQVertex(); ++i) {
-            if (matrix[v][i] != poison) {
-                answer.push_back(i);
+        for (Vertex next_vertex = 0; next_vertex < GetQVertex(); ++next_vertex) {
+            if (matrix_[vertex][next_vertex] != kInfinity) {
+                answer.push_back(next_vertex);
             }
         }
         return answer;
     }
-
-    [[nodiscard]] std::vector<weight_t> GetNeighborsWeight(const Vertex& v) const override {
-        std::vector<weight_t> answer;
-        for (Vertex i = 0; i < GetQVertex(); ++i) {
-            if (matrix[v][i] != poison) {
-                answer.push_back(matrix[v][i]);
-            }
-        }
-        return answer;
-    }
-
-
 };
 
 //********************************************************************************************
 
-class GraphList final : public Graph {
+class [[maybe_unused]] GraphList final : public IGraph {
 private:
 
-    std::unordered_map<Vertex, Neighbors> list;
+    std::vector<std::vector<Vertex>> list_;
 
-    void Add(const Vertex& a, const Vertex& b, const weight_t& w) override {
-        if (a == b) {
-            return;
-        }
-        if (a < 0 || b < 0) {
-            return;
-        }
-        if (a >= q_vertex || b >= q_vertex) {
-            return;
-        }
-        list[a].vertex.push_back(b);
-        list[a].weight.push_back(w);
+    void Add(const Vertex& begin, const Vertex& end) override {
+        list_[begin].push_back(end);
         if (!is_oriented) {
-            list[b].vertex.push_back(a);
-            list[b].weight.push_back(w);
+            list_[end].push_back(begin);
         }
     }
 
 public:
 
-    explicit GraphList(const Vertex& quantity, bool oriented = false) {
-        for (Vertex i = 0; i < quantity; ++i) {
-            Neighbors tmp;
-            list[i] = tmp;
+    [[maybe_unused]] explicit GraphList(const int32_t& quantity, bool oriented = false) {
+        for (int32_t i = 0; i < quantity; ++i) {
+            std::vector<Vertex> tmp;
+            list_.push_back(tmp);
         }
         q_vertex = quantity;
         is_oriented = oriented;
     }
 
-    [[nodiscard]] Neighbors GetNeighbors(const Vertex& v) const override {
-        Neighbors answer;
-        answer.vertex = list.at(v).vertex;
-        answer.weight = list.at(v).weight;
-        return answer;
-    }
-
-    [[nodiscard]] std::vector<Vertex> GetNeighborsVertex(const Vertex& v) const override {
-        std::vector<Vertex> answer;
-        answer = list.at(v).vertex;
-        return answer;
-    }
-
-    [[nodiscard]] std::vector<weight_t> GetNeighborsWeight(const Vertex& v) const override {
-        std::vector<weight_t> answer;
-        answer = list.at(v).weight;
-        return answer;
+    [[nodiscard]] std::vector<Vertex> GetNeighbors(const Vertex& vertex) const override {
+        return list_[vertex];
     }
 
 };
+
 //********************************************************************************************
 
-enum {
-    WHITE = 0,
-    GREY = 1,
-    BLACK = 2
-};
-
-class GraphAlgorithm {
-    std::vector<dist_t> dist;
-    std::vector<Vertex> parent;
-    std::vector<color_t> color;
+struct GraphInfo {
     std::vector<bool> visit;
-
+    std::vector<TimeT> time_in;
+    std::vector<TimeT> time_out;
     std::set<Vertex> component;
 
-    Vertex start_cycle = poison;
-    Vertex end_cycle = poison;
+    TimeT time = 0;
 
-    time_type time = 0;
-
-    std::vector<time_type> time_in;
-    std::vector<time_type> time_out;
-
-    GraphAlgorithm(const uint64_t& quantity) {
-        dist.clear();
-        parent.clear();
-        color.clear();
-        visit.clear();
-
-        component.clear();
-
-        time_in.clear();
-        time_out.clear();
-
-        for (uint64_t i = 0; i < quantity; ++i) {
-            dist.push_back(poison);
-            parent.push_back(poison);
-            color.push_back(WHITE);
-            visit.push_back(false);
-
-            time_in.push_back(poison);
-            time_out.push_back(poison);
-        }
-
-        start_cycle = poison;
-        end_cycle = poison;
+    explicit GraphInfo(const int32_t& quantity) {
+        visit.resize(quantity, false);
+        time_in.resize(quantity, kInfinity);
+        time_out.resize(quantity, kInfinity);
 
         time = 0;
     }
-
-    void DFS(Graph& G, const Vertex& v, const Vertex& prev = poison) {
-        uint64_t count = 0;
-        visit[v] = true;
-        time_in[v] = time_out[v] = time++;
-        auto neighbors = G.GetNeighborsVertex(v);
-        for (auto &u : neighbors) {
-            if (u != prev) {
-                if (!visit[u]) {
-                    DFS(G, u, v);
-                    time_out[v] = std::min(time_out[v], time_out[u]);
-                    if (time_out[u] >= time_in[v] && prev != poison) {
-                        component.insert(v);
-                    }
-                    ++count;
-                    continue;
-                }
-                time_out[v] = std::min(time_out[v], time_in[u]);
-            }
-        }
-        if (count > 1 && prev == poison) {
-            component.insert(v);
-        }
-    }
-
-    friend std::set<Vertex> FindArticulationPoints(Graph& G);
-
 };
 
-std::set<Vertex> FindArticulationPoints(Graph& G) {
-    GraphAlgorithm GAlg(G.GetQVertex());
+void DfsForArticulationPoints(IGraph& graph, const Vertex& current_vertex, const Vertex& prev, GraphInfo& info) {
+    uint32_t count = 0;
 
+    info.visit[current_vertex] = true;
+    info.time_in[current_vertex] = info.time;
+    info.time_out[current_vertex] = info.time;
+    ++info.time;
 
-    for (Vertex v = 0; v < G.GetQVertex(); ++v) {
-        if (!GAlg.visit[v]) {
-            GAlg.DFS(G, v);
+    auto neighbors = graph.GetNeighbors(current_vertex);
+    for (auto &next_vertex : neighbors) {
+        if (next_vertex != prev) {
+            if (!info.visit[next_vertex]) {
+                DfsForArticulationPoints(graph, next_vertex, current_vertex, info);
+                if (info.time_out[current_vertex] > info.time_out[next_vertex]) {
+                    info.time_out[current_vertex] = info.time_out[next_vertex];
+                }
+                if (info.time_out[next_vertex] >= info.time_in[current_vertex] && prev != kInfinity) {
+                    info.component.insert(current_vertex + 1);
+                }
+                ++count;
+                continue;
+            }
+            if (info.time_out[current_vertex] > info.time_in[next_vertex]) {
+                info.time_out[current_vertex] = info.time_in[next_vertex];
+            }
+        }
+    }
+    if (count > 1 && prev == kInfinity) {
+        info.component.insert(current_vertex + 1);
+    }
+}
+
+std::set<Vertex> FindArticulationPoints(IGraph& graph) {
+    GraphInfo info(graph.GetQVertex());
+    for (Vertex current_vertex = 0; current_vertex < graph.GetQVertex(); ++current_vertex) {
+        if (!info.visit[current_vertex]) {
+            Vertex prev = kInfinity;
+            DfsForArticulationPoints(graph, current_vertex, prev, info);
         }
     }
 
-    std::set<Vertex> answer;
-    for (auto &element : GAlg.component) {
-        answer.insert(element + 1);
-    }
-    return answer;
+    return info.component;
 }
 
 //********************************************************************************************
 
 enum GraphType {
-    ORIENTED = true,
+    ORIENTED [[maybe_unused]] = true,
     NOT_ORIENTED = false
 };
 
@@ -284,18 +179,20 @@ int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(nullptr);
 
-    Vertex q_vertex = 0, q_edge = 0;
+    int32_t q_vertex = 0;
+    int32_t q_edge = 0;
     std::cin >> q_vertex >> q_edge;
 
-    GraphList G(q_vertex, NOT_ORIENTED);
+    GraphList graph(q_vertex, NOT_ORIENTED);
 
-    for (uint64_t i = 0; i < q_edge; ++i) {
-        Vertex a = 0, b = 0;
-        std::cin >> a >> b;
-        G.AddEdge(a, b, 0);
+    for (int32_t i = 0; i < q_edge; ++i) {
+        Vertex begin = 0;
+        Vertex end = 0;
+        std::cin >> begin >> end;
+        graph.AddEdge(begin, end);
     }
 
-    auto answer = FindArticulationPoints(G);
+    auto answer = FindArticulationPoints(graph);
     std::cout << answer.size() << std::endl;
     for (auto &element : answer) {
         std::cout << element << std::endl;
