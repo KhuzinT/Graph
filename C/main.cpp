@@ -1,34 +1,39 @@
 #include <iostream>
 #include <algorithm>
-#include <unordered_map>
 #include <vector>
 #include <queue>
+#include <cmath>
 
 //********************************************************************************************
 
-typedef uint64_t Vertex;
+using Vertex = int32_t;
 
-typedef uint64_t dist_t;
+using DistT = int32_t;
 
-typedef uint64_t weight_t;
-
-const uint64_t poison = 1000 * 1000 * 1000 * 1LL;
+const int32_t kInfinity = 1000 * 1000 * 1000 * 1LL;
 
 //********************************************************************************************
 
-class Graph {
+class IGraph {
+private:
+
+    bool ValidVertex(const Vertex& current_vertex) {
+        if (current_vertex < 0) {
+            return false;
+        }
+        if (current_vertex >= q_vertex) {
+            return false;
+        }
+        return true;
+    }
+
 protected:
 
     Vertex q_vertex = 0;
 
     bool is_oriented = false;
 
-    virtual void Add(const Vertex& a, const Vertex& b, const weight_t& w) = 0;
-
-    struct Neighbors {
-        std::vector<Vertex> vertex;
-        std::vector<weight_t> weight;
-    };
+    virtual void Add(const Vertex& begin, const Vertex& end) = 0;
 
 public:
 
@@ -36,78 +41,46 @@ public:
         return q_vertex;
     }
 
-    [[nodiscard]] virtual Neighbors GetNeighbors(const Vertex& v) const = 0;
+    [[nodiscard]] virtual std::vector<Vertex> GetNeighbors(const Vertex& current_vertex) const = 0;
 
-    [[nodiscard]] virtual std::vector<Vertex> GetNeighborsVertex(const Vertex& v) const = 0;
-
-    [[nodiscard]] virtual std::vector<weight_t> GetNeighborsWeight(const Vertex& v) const = 0;
-
-    void AddEdge(const Vertex& a, const Vertex& b, const weight_t& w) {
-        Add(a - 1, b - 1, w);
+    void AddEdge(const Vertex& begin, const Vertex& end) {
+        if (ValidVertex(begin - 1) && ValidVertex(end - 1) && begin != end) {
+            Add(begin - 1, end - 1);
+        }
     }
 
 };
 
 //********************************************************************************************
 
-class GraphMatrix final : public Graph {
+class [[maybe_unused]] GraphMatrix final : public IGraph {
 private:
 
-    std::vector<std::vector<Vertex>> matrix;
+    std::vector<std::vector<Vertex>> matrix_;
 
-    void Add(const Vertex& a, const Vertex& b, const weight_t& w) override {
-        if (a == b) {
-            return;
-        }
-        if (a < 0 || b < 0) {
-            return;
-        }
-        if (a >= q_vertex || b >= q_vertex) {
-            return;
-        }
-        matrix[a][b] = w;
+    void Add(const Vertex& begin, const Vertex& end) override {
+        matrix_[begin][end] = 1;
         if (!is_oriented) {
-            matrix[b][a] = w;
+            matrix_[end][begin] = 1;
         }
     }
 
 public:
 
-    explicit GraphMatrix(const Vertex& quantity, bool oriented = false) {
+    [[maybe_unused]] explicit GraphMatrix(const Vertex& quantity, bool oriented = false) {
         for (Vertex i = 0; i < quantity; ++i) {
-            std::vector<Vertex> tmp(quantity, poison);
-            matrix.push_back(tmp);
+            std::vector<Vertex> tmp(quantity, kInfinity);
+            matrix_.push_back(tmp);
         }
         q_vertex = quantity;
         is_oriented = oriented;
     }
 
-    [[nodiscard]] Neighbors GetNeighbors(const Vertex& v) const override {
-        Neighbors answer;
-        for (Vertex i = 0; i < GetQVertex(); ++i) {
-            if (matrix[v][i] != poison) {
-                answer.vertex.push_back(i);
-                answer.weight.push_back(matrix[v][i]);
-            }
-        }
-        return answer;
-    }
-
-    [[nodiscard]] std::vector<Vertex> GetNeighborsVertex(const Vertex& v) const override {
+    [[nodiscard]] std::vector<Vertex> GetNeighbors(const Vertex& current_vertex) const override {
         std::vector<Vertex> answer;
-        for (Vertex i = 0; i < GetQVertex(); ++i) {
-            if (matrix[v][i] != poison) {
-                answer.push_back(i);
-            }
-        }
-        return answer;
-    }
-
-    [[nodiscard]] std::vector<weight_t> GetNeighborsWeight(const Vertex& v) const override {
-        std::vector<weight_t> answer;
-        for (Vertex i = 0; i < GetQVertex(); ++i) {
-            if (matrix[v][i] != poison) {
-                answer.push_back(matrix[v][i]);
+        for (Vertex next_vertex = 0; next_vertex < GetQVertex(); ++next_vertex) {
+            if (matrix_[current_vertex][next_vertex] != kInfinity) {
+                answer.push_back(next_vertex);
             }
         }
         return answer;
@@ -118,175 +91,198 @@ public:
 
 //********************************************************************************************
 
-class GraphList final : public Graph {
+class [[maybe_unused]] GraphList final : public IGraph {
 private:
 
-    std::unordered_map<Vertex, Neighbors> list;
+    std::vector<std::vector<Vertex>> list_;
 
-    void Add(const Vertex& a, const Vertex& b, const weight_t& w) override {
-        if (a == b) {
-            return;
-        }
-        if (a < 0 || b < 0) {
-            return;
-        }
-        if (a >= q_vertex || b >= q_vertex) {
-            return;
-        }
-        list[a].vertex.push_back(b);
-        list[a].weight.push_back(w);
+    void Add(const Vertex& begin, const Vertex& end) override {
+        list_[begin].push_back(end);
         if (!is_oriented) {
-            list[b].vertex.push_back(a);
-            list[b].weight.push_back(w);
+            list_[end].push_back(begin);
         }
     }
 
 public:
 
-    explicit GraphList(const Vertex& quantity, bool oriented = false) {
+    [[maybe_unused]] explicit GraphList(const Vertex& quantity, bool oriented = false) {
         for (Vertex i = 0; i < quantity; ++i) {
-            Neighbors tmp;
-            list[i] = tmp;
+            std::vector<Vertex> tmp;
+            list_.push_back(tmp);
         }
         q_vertex = quantity;
         is_oriented = oriented;
     }
 
-    [[nodiscard]] Neighbors GetNeighbors(const Vertex& v) const override {
-        Neighbors answer;
-        answer.vertex = list.at(v).vertex;
-        answer.weight = list.at(v).weight;
-        return answer;
+    [[nodiscard]] std::vector<Vertex> GetNeighbors(const Vertex& current_vertex) const override {
+        return list_[current_vertex];
     }
-
-    [[nodiscard]] std::vector<Vertex> GetNeighborsVertex(const Vertex& v) const override {
-        std::vector<Vertex> answer;
-        answer = list.at(v).vertex;
-        return answer;
-    }
-
-    [[nodiscard]] std::vector<weight_t> GetNeighborsWeight(const Vertex& v) const override {
-        std::vector<weight_t> answer;
-        answer = list.at(v).weight;
-        return answer;
-    }
+    
 
 };
 
 //********************************************************************************************
 
-class GraphAlgorithm {
-    std::vector<dist_t> dist;
-    std::vector<Vertex> parent;
+void BFS(IGraph& graph, const Vertex& start, const Vertex& finish, std::vector<DistT>& dist, std::vector<Vertex>& parent) {
+    std::queue<Vertex> queue_of_vertex;
 
-    explicit GraphAlgorithm(const uint64_t& quantity) {
-        dist.clear();
-        parent.clear();
+    dist[start] = 0;
+    queue_of_vertex.push(start);
 
-        for (uint64_t i = 0; i < quantity; ++i) {
-            dist.push_back(poison);
-            parent.push_back(poison);
-        }
-    }
+    while (!queue_of_vertex.empty()) {
+        Vertex current_vertex = queue_of_vertex.front();
+        queue_of_vertex.pop();
 
-    void BFS(Graph& G, const Vertex& start, const Vertex& finish) {
-        std::queue<Vertex> q;
-
-        dist[start] = 0;
-        q.push(start);
-
-        while (!q.empty()) {
-            Vertex v = q.front();
-            q.pop();
-
-            auto neighbors = G.GetNeighborsVertex(v);
-            for (auto &u: neighbors) {
-                if (dist[u] == poison) {
-                    dist[u] = dist[v] + 1;
-                    parent[u] = v;
-                    q.push(u);
-                }
+        auto neighbors = graph.GetNeighbors(current_vertex);
+        for (auto &next_vertex: neighbors) {
+            if (dist[next_vertex] == kInfinity) {
+                dist[next_vertex] = dist[current_vertex] + 1;
+                parent[next_vertex] = current_vertex;
+                queue_of_vertex.push(next_vertex);
             }
         }
     }
+}
 
-    friend std::vector<Vertex> HorsePath(Graph& G, const Vertex& N, const Vertex& start, const Vertex& finish);
-};
-
-std::vector<Vertex> HorsePath(Graph& G, const Vertex& N, const Vertex& start, const Vertex& finish) {
-    GraphAlgorithm GAlg(G.GetQVertex());
-
-    GAlg.BFS(G, start - 1 - N, finish - 1 - N);
+std::vector<Vertex> GetAnswer(const Vertex& finish, const int32_t& board_size, std::vector<DistT>& dist, std::vector<Vertex>& parent) {
+    if (dist[finish - 1 - board_size] == kInfinity) {
+        return {};
+    }
 
     std::vector<Vertex> answer;
-    if (GAlg.dist[finish - 1 - N] == poison) {
-        return answer;
-    }
-
-    for (Vertex v = finish - 1 - N; v != poison; v = GAlg.parent[v]) {
-        answer.push_back(v);
+    for (Vertex current_vertex = finish - 1 - board_size; current_vertex != kInfinity; current_vertex = parent[current_vertex]) {
+        answer.push_back(current_vertex);
     }
     std::reverse(answer.begin(), answer.end());
 
     return answer;
 }
 
+std::vector<Vertex> ShortestDistanceFromStartToFinish(IGraph& graph, const Vertex& start, const Vertex& finish) {
+    const auto board_size = static_cast<int32_t>(std::sqrt(graph.GetQVertex()));
+    std::vector<DistT> dist(graph.GetQVertex(), kInfinity);
+    std::vector<Vertex> parent(graph.GetQVertex(), kInfinity);
+
+    BFS(graph, start - 1 - board_size, finish - 1 - board_size, dist, parent);
+
+    return GetAnswer(finish, board_size, dist, parent);
+}
+
 //********************************************************************************************
 
-void DesignateNeighbors(Graph& G, const Vertex& v, const Vertex& N) {
-    Vertex border = (v - 1) / N;
-    border *= N;
-    if (border <= v + 1 && v + 1 < border + N) {
-        G.AddEdge(v + 2 - N, v, 0);
-        G.AddEdge(v + 2 + N, v, 0);
+struct Point {
+    int32_t x_coordinate = 0;
+    int32_t y_coordinate = 0;
+
+    explicit Point(const int32_t& x, const int32_t& y) {
+        x_coordinate = x;
+        y_coordinate = y;
     }
-    if (border <= v - 3 && v - 3 < border + N) {
-        G.AddEdge(v - 2 - N, v, 0);
-        G.AddEdge(v - 2 + N, v, 0);
+};
+
+Point GetPointFromVertex(const Vertex& current_vertex, const int32_t& board_size) {
+    int32_t x = current_vertex % board_size;
+    int32_t y = current_vertex / board_size;
+    return Point(x, y);
+}
+
+Vertex GetVertexFromPoint(const int32_t& x_coordinate, const int32_t& y_coordinate, const int32_t& board_size) {
+    return x_coordinate + y_coordinate * board_size;
+}
+
+bool MoveNotOutOfBoard(const Vertex& current_vertex, const int32_t& left_board_border, const int32_t& right_board_border) {
+    return left_board_border <= current_vertex && current_vertex < right_board_border;
+}
+
+void MoveThreeRightOneUpAndDown(IGraph& graph, const Vertex& current_vertex, const int32_t& board_size, const int32_t& left_board_border, const int32_t& right_board_border) {
+    if (MoveNotOutOfBoard(current_vertex + 1, left_board_border, right_board_border)) {
+        Vertex three_right_one_up = current_vertex + 2 + board_size;
+        graph.AddEdge(current_vertex, three_right_one_up);
+
+        Vertex three_right_one_down = current_vertex + 2 - board_size;
+        graph.AddEdge(current_vertex, three_right_one_down);
     }
-    if (border <= v && v < border + N) {
-        G.AddEdge(v + 1 - 2 * N, v, 0);
-        G.AddEdge(v + 1 + 2 * N, v, 0);
+}
+
+void MoveThreeLeftOneUpAndDown(IGraph& graph, const Vertex& current_vertex, const int32_t& board_size, const int32_t& left_board_border, const int32_t& right_board_border) {
+    if (MoveNotOutOfBoard(current_vertex - 3, left_board_border, right_board_border)) {
+        Vertex three_left_one_up = current_vertex - 2 + board_size;
+        graph.AddEdge(current_vertex, three_left_one_up);
+
+        Vertex three_left_one_down = current_vertex - 2 - board_size;
+        graph.AddEdge(current_vertex, three_left_one_down);
     }
-    if (border <= v - 2 && v - 2 < border + N) {
-        G.AddEdge(v - 1 - 2 * N, v, 0);
-        G.AddEdge(v - 1 + 2 * N, v, 0);
+}
+
+void MoveOneRightThreeUpAndDown(IGraph& graph, const Vertex& current_vertex, const int32_t& board_size, const int32_t& left_board_border, const int32_t& right_board_border) {
+    if (MoveNotOutOfBoard(current_vertex, left_board_border, right_board_border)) {
+        Vertex one_right_three_up = current_vertex + 1 + 2 * board_size;
+        graph.AddEdge(current_vertex, one_right_three_up);
+
+        Vertex one_right_three_down = current_vertex + 1 - 2 * board_size;
+        graph.AddEdge(current_vertex, one_right_three_down);
     }
+}
+
+void MoveOneLeftThreeUpAndDown(IGraph& graph, const Vertex& current_vertex, const int32_t& board_size, const int32_t& left_board_border, const int32_t& right_board_border) {
+    if (MoveNotOutOfBoard(current_vertex - 2, left_board_border, right_board_border)) {
+        Vertex one_left_three_up = current_vertex - 1 + 2 * board_size;
+        graph.AddEdge(current_vertex, one_left_three_up);
+
+        Vertex one_left_three_down = current_vertex - 1 - 2 * board_size;
+        graph.AddEdge(current_vertex, one_left_three_down);
+    }
+}
+
+void DesignateNeighbors(IGraph& graph, const Vertex& current_vertex) {
+    const auto board_size = static_cast<int32_t>(std::sqrt(graph.GetQVertex()));
+    int32_t left_board_border = ((current_vertex - 1) / board_size);
+    left_board_border *= board_size;
+    int32_t right_board_border = left_board_border + board_size;
+
+    MoveThreeRightOneUpAndDown(graph, current_vertex, board_size, left_board_border, right_board_border);
+
+    MoveThreeLeftOneUpAndDown(graph, current_vertex, board_size, left_board_border, right_board_border);
+
+    MoveOneRightThreeUpAndDown(graph, current_vertex, board_size, left_board_border, right_board_border);
+
+    MoveOneLeftThreeUpAndDown(graph, current_vertex, board_size, left_board_border, right_board_border);
 }
 
 //********************************************************************************************
 
 int main() {
-    Vertex N = 0;
-    std::cin >> N;
+    int32_t board_size = 0;
+    std::cin >> board_size;
 
-    GraphMatrix G(N * N);
+    GraphMatrix graph(board_size * board_size);
 
-    for (Vertex v = 1; v <= N * N; ++v) {
-        DesignateNeighbors(G, v, N);
+    for (Vertex current_vertex = 1; current_vertex <= board_size * board_size; ++current_vertex) {
+        DesignateNeighbors(graph, current_vertex);
     }
 
-    Vertex x_start = 0, y_start = 0;
-    Vertex x_finish = 0, y_finish = 0;
+    int32_t x_start = 0;
+    int32_t y_start = 0;
+    int32_t x_finish = 0;
+    int32_t y_finish = 0;
 
     std::cin >> x_start >> y_start;
     std::cin >> x_finish >> y_finish;
 
-    Vertex start = x_start + y_start * N;
-    Vertex finish = x_finish + y_finish * N;
+    Vertex start = GetVertexFromPoint(x_start, y_start, board_size);
+    Vertex finish = GetVertexFromPoint(x_finish, y_finish, board_size);
 
-    auto answer = HorsePath(G, N, start, finish);
+    auto answer = ShortestDistanceFromStartToFinish(graph, start, finish);
     if (answer.empty()) {
         std::cout << -1;
-        return 0;
+    } else {
+        std::cout << answer.size() - 1 << std::endl;
+        for (auto &element: answer) {
+            auto elem_point = GetPointFromVertex(element, board_size);
+            std::cout << elem_point.x_coordinate + 1 << ' ' << elem_point.y_coordinate + 1 << std::endl;
+        }
     }
 
-    std::cout << answer.size() - 1 << std::endl;
-    for (auto &element: answer) {
-        Vertex x = element % N;
-        Vertex y = element / N;
-        std::cout << x + 1 << ' ' << y + 1 << std::endl;
-    }
     return 0;
 }
 
